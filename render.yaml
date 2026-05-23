@@ -17,5 +17,11 @@ services:
         sync: false
       - key: ELEVENLABS_MODEL_ID
         value: eleven_multilingual_v2
+      - key: TTS_PROVIDER
+        value: gemini
+      - key: GEMINI_TTS_MODEL
+        value: gemini-2.5-flash-preview-tts
+      - key: GEMINI_TTS_VOICE
+        value: Kore
       - key: ALLOWED_ORIGINS
         sync: false

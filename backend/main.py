@@ -1,5 +1,8 @@
 import os
+import io
 import json
+import base64
+import wave
 import httpx
 import pandas as pd
 from fastapi import FastAPI, UploadFile, File, HTTPException
@@ -24,6 +27,9 @@ app.add_middleware(
 )
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+TTS_PROVIDER = os.getenv("TTS_PROVIDER", "gemini").lower()
+GEMINI_TTS_MODEL = os.getenv("GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts")
+GEMINI_TTS_VOICE = os.getenv("GEMINI_TTS_VOICE", "Kore")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
 ELEVENLABS_MODEL_ID = os.getenv("ELEVENLABS_MODEL_ID", "eleven_multilingual_v2")
@@ -32,9 +38,43 @@ if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 
 
+def _pcm_to_wav(pcm_bytes: bytes, rate: int = 24000) -> bytes:
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(rate)
+        wf.writeframes(pcm_bytes)
+    return buf.getvalue()
+
+
+def _concat_wav_parts(wav_parts: list[bytes]) -> bytes:
+    if len(wav_parts) == 1:
+        return wav_parts[0]
+
+    frames: list[bytes] = []
+    params = None
+    for part in wav_parts:
+        with wave.open(io.BytesIO(part), "rb") as wf:
+            if params is None:
+                params = wf.getparams()
+            frames.append(wf.readframes(wf.getnframes()))
+
+    out = io.BytesIO()
+    with wave.open(out, "wb") as wf:
+        wf.setparams(params)
+        wf.writeframes(b"".join(frames))
+    return out.getvalue()
+
+
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "tts_provider": TTS_PROVIDER,
+        "gemini_configured": bool(GEMINI_API_KEY),
+        "elevenlabs_configured": bool(ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID),
+    }
 
 
 @app.post("/analyse")
@@ -96,7 +136,6 @@ class AudioRequest(BaseModel):
 
 
 def _chunk_text(text: str, max_chars: int = 4500) -> list[str]:
-    """Split long scripts at sentence boundaries for ElevenLabs limits."""
     text = text.strip()
     if len(text) <= max_chars:
         return [text]
@@ -116,7 +155,20 @@ def _chunk_text(text: str, max_chars: int = 4500) -> list[str]:
     return chunks
 
 
-async def _synthesize_chunk(client: httpx.AsyncClient, text: str) -> bytes:
+def _parse_elevenlabs_error(response: httpx.Response) -> str:
+    try:
+        data = response.json()
+        detail = data.get("detail")
+        if isinstance(detail, dict):
+            return detail.get("message", response.text)
+        if isinstance(detail, str):
+            return detail
+    except Exception:
+        pass
+    return response.text
+
+
+async def _synthesize_elevenlabs_chunk(client: httpx.AsyncClient, text: str) -> bytes:
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}"
     params = {"output_format": "mp3_44100_128"}
     headers = {
@@ -132,26 +184,59 @@ async def _synthesize_chunk(client: httpx.AsyncClient, text: str) -> bytes:
     response = await client.post(url, params=params, headers=headers, json=payload, timeout=300.0)
 
     if response.status_code != 200:
-        detail = response.text
-        try:
-            detail = response.json().get("detail", {}).get("message", response.text)
-        except Exception:
-            pass
         raise HTTPException(
             status_code=response.status_code,
-            detail=f"ElevenLabs error: {detail}",
+            detail=f"ElevenLabs error: {_parse_elevenlabs_error(response)}",
         )
 
     return response.content
 
 
+async def _synthesize_gemini_chunk(client: httpx.AsyncClient, text: str) -> bytes:
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_TTS_MODEL}:generateContent"
+    headers = {
+        "x-goog-api-key": GEMINI_API_KEY,
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "contents": [{"parts": [{"text": text}]}],
+        "generationConfig": {
+            "responseModalities": ["AUDIO"],
+            "speechConfig": {
+                "voiceConfig": {
+                    "prebuiltVoiceConfig": {
+                        "voiceName": GEMINI_TTS_VOICE,
+                    }
+                }
+            },
+        },
+    }
+
+    response = await client.post(url, headers=headers, json=payload, timeout=300.0)
+
+    if response.status_code != 200:
+        detail = response.text
+        try:
+            detail = response.json().get("error", {}).get("message", response.text)
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=response.status_code,
+            detail=f"Gemini TTS error: {detail}",
+        )
+
+    data = response.json()
+    try:
+        inline = data["candidates"][0]["content"]["parts"][0]["inlineData"]
+        pcm_bytes = base64.b64decode(inline["data"])
+    except (KeyError, IndexError, TypeError) as e:
+        raise HTTPException(status_code=500, detail=f"Gemini TTS returned unexpected response: {e}")
+
+    return _pcm_to_wav(pcm_bytes)
+
+
 @app.post("/generate-audio")
 async def generate_audio(request: AudioRequest):
-    if not ELEVENLABS_API_KEY:
-        raise HTTPException(status_code=500, detail="ELEVENLABS_API_KEY is not set in the environment")
-    if not ELEVENLABS_VOICE_ID:
-        raise HTTPException(status_code=500, detail="ELEVENLABS_VOICE_ID is not set in the environment")
-
     script = request.podcast_script.strip()
     if not script:
         raise HTTPException(status_code=400, detail="Podcast script is empty")
@@ -160,10 +245,35 @@ async def generate_audio(request: AudioRequest):
 
     try:
         async with httpx.AsyncClient() as client:
-            audio_parts: list[bytes] = []
-            for chunk in chunks:
-                audio_parts.append(await _synthesize_chunk(client, chunk))
-            audio_bytes = b"".join(audio_parts)
+            if TTS_PROVIDER == "elevenlabs":
+                if not ELEVENLABS_API_KEY:
+                    raise HTTPException(status_code=500, detail="ELEVENLABS_API_KEY is not set in the environment")
+                if not ELEVENLABS_VOICE_ID:
+                    raise HTTPException(status_code=500, detail="ELEVENLABS_VOICE_ID is not set in the environment")
+
+                audio_parts: list[bytes] = []
+                for chunk in chunks:
+                    audio_parts.append(await _synthesize_elevenlabs_chunk(client, chunk))
+                audio_bytes = b"".join(audio_parts)
+                media_type = "audio/mpeg"
+                filename = "podcast.mp3"
+
+            elif TTS_PROVIDER == "gemini":
+                if not GEMINI_API_KEY:
+                    raise HTTPException(status_code=500, detail="GEMINI_API_KEY is not set in the environment")
+
+                wav_parts: list[bytes] = []
+                for chunk in chunks:
+                    wav_parts.append(await _synthesize_gemini_chunk(client, chunk))
+                audio_bytes = _concat_wav_parts(wav_parts)
+                media_type = "audio/wav"
+                filename = "podcast.wav"
+
+            else:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Unknown TTS_PROVIDER '{TTS_PROVIDER}'. Use 'gemini' or 'elevenlabs'.",
+                )
     except HTTPException:
         raise
     except Exception as e:
@@ -171,6 +281,6 @@ async def generate_audio(request: AudioRequest):
 
     return Response(
         content=audio_bytes,
-        media_type="audio/mpeg",
-        headers={"Content-Disposition": 'attachment; filename="podcast.mp3"'},
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

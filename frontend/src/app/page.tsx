@@ -23,6 +23,7 @@ export default function Home() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [isAudioLoading, setIsAudioLoading] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [audioFilename, setAudioFilename] = useState('podcast.wav');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -42,6 +43,7 @@ export default function Home() {
   const clearAudio = () => {
     if (audioUrl) URL.revokeObjectURL(audioUrl);
     setAudioUrl(null);
+    setAudioFilename('podcast.wav');
   };
 
   const handleAnalyse = async () => {
@@ -103,6 +105,8 @@ export default function Home() {
       if (!blob.type.startsWith('audio/')) {
         throw new Error('Server did not return audio. Check backend logs.');
       }
+      const ext = blob.type.includes('wav') ? 'wav' : 'mp3';
+      setAudioFilename(`podcast.${ext}`);
       const url = URL.createObjectURL(blob);
       setAudioUrl(url);
     } catch (err: unknown) {
@@ -244,13 +248,13 @@ export default function Home() {
                       Your browser does not support audio playback.
                     </audio>
                     <div className={styles.audioButtons}>
-                      <a href={audioUrl} download="podcast.mp3" className={styles.downloadLink}>
+                      <a href={audioUrl} download={audioFilename} className={styles.downloadLink}>
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                           <polyline points="7 10 12 15 17 10"></polyline>
                           <line x1="12" y1="15" x2="12" y2="3"></line>
                         </svg>
-                        Download MP3
+                        Download audio
                       </a>
                       <button
                         type="button"
