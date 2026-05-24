@@ -131,8 +131,8 @@ export default function Home() {
     <>
       <nav className={styles.nav}>
         <div className={styles.navLogo}>
-          <Image src="/speed-icon.svg" alt="Speed icon" width={36} height={36} />
-          <Image src="/speed-logo.svg" alt="Speed" className={styles.navWordmark} width={80} height={20} />
+          <Image src="/speed-icon.png" alt="Speed icon" width={36} height={36} />
+          <Image src="/speed-logo.png" alt="Speed" className={styles.navWordmark} width={80} height={20} />
         </div>
       </nav>
 
@@ -428,7 +428,7 @@ export default function Home() {
 
       <footer className={styles.footer}>
         <div className={styles.footerLogo}>
-          <Image src="/speed-icon.svg" alt="Speed" width={28} height={28} />
+          <Image src="/speed-icon.png" alt="Speed" width={28} height={28} />
           <span className={styles.footerCopy}>Speed Data Analyser — Demo Build</span>
         </div>
         <div className={styles.footerCopy}>© 2026 Speed Agency. All rights reserved.</div>
