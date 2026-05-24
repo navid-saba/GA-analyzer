@@ -1,17 +1,53 @@
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
-  padding: 0;
   margin: 0;
+  padding: 0;
+}
+
+:root {
+  --red: #E8102A;
+  --red-dark: #B50D21;
+  --red-glow: rgba(232, 16, 42, 0.15);
+  --black: #0A0A0A;
+  --dark: #111111;
+  --surface: #181818;
+  --surface2: #222222;
+  --border: rgba(255, 255, 255, 0.07);
+  --text: #F5F5F5;
+  --text-muted: rgba(245, 245, 245, 0.5);
+  --green: #2ECC71;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 html,
 body {
   max-width: 100vw;
   overflow-x: hidden;
-  background-color: #0f172a;
+  background: var(--black);
+  color: var(--text);
+  font-family: var(--font-body), 'Barlow', sans-serif;
+  min-height: 100vh;
 }
 
 a {
   color: inherit;
   text-decoration: none;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--dark);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(232, 16, 42, 0.4);
+  border-radius: 2px;
 }

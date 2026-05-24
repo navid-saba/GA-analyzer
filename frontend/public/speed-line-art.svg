@@ -1,0 +1,15 @@
+<svg viewBox="0 0 800 600" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0 500 L800 0" stroke="white" stroke-width="1.5"/>
+  <path d="M0 550 L800 50" stroke="white" stroke-width="1"/>
+  <path d="M0 600 L800 100" stroke="white" stroke-width="0.75"/>
+  <path d="M100 600 L800 200" stroke="white" stroke-width="1"/>
+  <path d="M200 600 L800 300" stroke="white" stroke-width="1.5"/>
+  <path d="M300 600 L800 400" stroke="white" stroke-width="1"/>
+  <path d="M400 600 L800 500" stroke="white" stroke-width="0.75"/>
+  <path d="M50 600 L800 150" stroke="white" stroke-width="0.5"/>
+  <path d="M150 600 L800 250" stroke="white" stroke-width="0.5"/>
+  <path d="M250 600 L800 350" stroke="white" stroke-width="0.5"/>
+  <circle cx="650" cy="80" r="120" stroke="white" stroke-width="1"/>
+  <circle cx="650" cy="80" r="180" stroke="white" stroke-width="0.5"/>
+  <circle cx="650" cy="80" r="240" stroke="white" stroke-width="0.25"/>
+</svg>

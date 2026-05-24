@@ -100,10 +100,15 @@ async def analyse(file: UploadFile = File(...)):
     - "summary_table": array of { "metric", "value", "change" } — extract all available metrics including sessions, users, conversions, bounce rate, top pages, revenue if present. Calculate change if possible or set to "N/A".
     - "questions_and_answers": array of { "question", "answer" } — 5 to 7 executive-relevant questions derived from data patterns, each answered in 2–3 sentences using only the data.
     - "exec_summary": array of 5 objects { "area", "key_finding", "implication" }
-    - "podcast_script": string, ~550 words, single host, plain spoken language, no jargon, no bullet points, structured as: short intro -> key findings -> 3 highlights -> 1 risk or opportunity -> close with one clear recommendation.
-
+    - "podcast_script": string, maximum 30 seconds when spoken aloud (approximately 70–80 words at natural speaking pace). Structure as: greeting -> executive summary -> key highlights from the last 7 days. Follow these rules strictly:
+        * Open with exactly: "Good morning Duncan, your weekly report is ready."
+        * Follow immediately with: "Here is your executive summary,"
+        * Then deliver: 2–3 concise highlights covering any uplift, decline, or notable performance observations from the data.
+        * Close with one clear, direct recommendation or forward-looking observation.
+        * Tone: authoritative growth expert — informative, grounded, and engaging. No filler, no hype.
+        * Language rules: never use words or phrases like "huge", "massive", "outstanding", "remarkable", "incredible", "exceptional", "skyrocketed", "plummeted", or any exaggerated superlatives. State the data plainly and let it speak for itself.
+        * No bullet points, no jargon, no markdown. Plain spoken sentences only.
     Return ONLY valid JSON. No markdown formatting, no backticks, no markdown code blocks. Just the raw JSON object.
-
     Data:
     """ + csv_data
 
